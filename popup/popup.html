@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinanceSignal</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <span class="logo-mark">▲</span>
+      <span class="app-title">FinanceSignal</span>
+    </div>
+    <div class="header-right">
+      <span class="last-updated" id="last-updated">—</span>
+      <button class="refresh-btn" id="refresh-btn" title="Refresh now">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M23 4v6h-6"/>
+          <path d="M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/>
+          <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Financial disclaimer — always visible above signals -->
+  <div class="disclaimer-banner">
+    <svg class="disclaimer-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <span>FinanceSignal is a news analysis tool and does not provide licensed financial advice.
+    Signals are based on keyword sentiment only and should not be relied upon for investment decisions.</span>
+  </div>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="signals">Signals</button>
+    <button class="tab-btn" data-tab="news">News Feed</button>
+  </nav>
+
+  <!-- Signals Panel -->
+  <section class="tab-panel active" id="tab-signals">
+    <div class="panel-state" id="signals-loading">
+      <div class="spinner"></div>
+      <span>Analyzing news…</span>
+    </div>
+    <div class="panel-state hidden" id="signals-empty">
+      <span class="empty-icon">◎</span>
+      <span>No actionable signals in the last 72 hours.</span>
+      <span class="empty-sub">Visit <strong>finance.yahoo.com</strong> to refresh.</span>
+    </div>
+    <div class="panel-state hidden" id="signals-no-tab">
+      <span class="empty-icon">↗</span>
+      <span>Open Yahoo Finance to load signals.</span>
+      <a class="open-yahoo-link" href="https://finance.yahoo.com/topic/latest-news/" target="_blank" rel="noopener noreferrer">
+        Open Yahoo Finance
+      </a>
+    </div>
+    <div class="panel-state hidden error-state" id="signals-error">
+      <span class="empty-icon">⚠</span>
+      <span id="signals-error-msg">Something went wrong. Try again.</span>
+    </div>
+    <ul class="signal-list" id="signal-list"></ul>
+  </section>
+
+  <!-- News Feed Panel -->
+  <section class="tab-panel hidden" id="tab-news">
+    <div class="panel-state" id="news-loading">
+      <div class="spinner"></div>
+      <span>Loading news feed…</span>
+    </div>
+    <div class="panel-state hidden" id="news-empty">
+      <span class="empty-icon">◎</span>
+      <span>No recent articles found.</span>
+      <span class="empty-sub">Visit <strong>finance.yahoo.com</strong> to load the news feed.</span>
+    </div>
+    <ul class="news-list" id="news-list"></ul>
+  </section>
+
+  <!-- Feedback modal overlay -->
+  <div class="feedback-overlay hidden" id="feedback-overlay">
+    <div class="feedback-modal">
+      <div class="feedback-modal-header">
+        <span id="feedback-modal-title">Rate this signal</span>
+        <button class="modal-close-btn" id="feedback-close">✕</button>
+      </div>
+      <p class="feedback-modal-sub">Optional: what actually happened? This helps improve future signals.</p>
+      <textarea
+        class="feedback-note-input"
+        id="feedback-note"
+        placeholder="e.g. 'Stock dropped 4% the next day' or 'Great call, rallied as expected'"
+        rows="3"
+      ></textarea>
+      <div class="feedback-modal-actions">
+        <button class="feedback-submit-btn" id="feedback-submit">Save feedback</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

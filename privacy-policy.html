@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinanceSignal — Privacy Policy</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: #f9fafb;
+      color: #1a1d27;
+      line-height: 1.7;
+      padding: 40px 24px 80px;
+    }
+    .container { max-width: 740px; margin: 0 auto; }
+    h1 { font-size: 28px; font-weight: 800; margin-bottom: 6px; }
+    .meta { color: #6b7280; font-size: 14px; margin-bottom: 40px; }
+    h2 { font-size: 18px; font-weight: 700; margin: 36px 0 10px; color: #111827; }
+    p  { font-size: 15px; color: #374151; margin-bottom: 12px; }
+    ul { padding-left: 22px; margin-bottom: 12px; }
+    li { font-size: 15px; color: #374151; margin-bottom: 6px; }
+    .highlight {
+      background: #f0fdf4;
+      border-left: 3px solid #16a34a;
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+      font-size: 15px;
+      color: #166534;
+    }
+    .contact {
+      background: #f3f4f6;
+      padding: 20px 24px;
+      border-radius: 10px;
+      margin-top: 40px;
+      font-size: 14px;
+      color: #4b5563;
+    }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    hr { border: none; border-top: 1px solid #e5e7eb; margin: 40px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <h1>FinanceSignal — Privacy Policy</h1>
+    <p class="meta">Last updated: May 2026 · Applies to the FinanceSignal Chrome extension</p>
+
+    <div class="highlight">
+      FinanceSignal does not collect, transmit, sell, or share any personal data.
+      All data the extension handles stays entirely on your own device.
+    </div>
+
+    <h2>1. Who we are</h2>
+    <p>
+      FinanceSignal is a Chrome browser extension that reads publicly available financial news from
+      Yahoo Finance and surfaces sentiment-based buy/sell signals. It stores only the data described
+      below, entirely within your browser using Chrome's built-in local storage API.
+    </p>
+
+    <h2>2. What data the extension handles</h2>
+
+    <h2 style="font-size:15px; font-weight:600; margin-top:20px; margin-bottom:6px;">2a. News articles (fetched from Yahoo Finance)</h2>
+    <p>
+      When you navigate to <strong>finance.yahoo.com</strong>, the extension reads the HTML of the page
+      you already have open. This is the same content you see in your browser. The extension does not
+      make separate or hidden network requests to Yahoo Finance or any other server.
+    </p>
+    <p>
+      The extracted article headlines, summaries, publication timestamps, and source URLs are stored
+      locally in <code>chrome.storage.local</code> so the popup can display them without re-reading
+      the page each time. This data is never transmitted anywhere.
+    </p>
+    <ul>
+      <li><strong>Stored:</strong> Article headlines, summaries, timestamps, URLs, detected ticker symbols</li>
+      <li><strong>Retention:</strong> Overwritten on every refresh; removed when the extension is uninstalled</li>
+      <li><strong>Transmitted:</strong> Never — stays on your device only</li>
+    </ul>
+
+    <h2 style="font-size:15px; font-weight:600; margin-top:20px; margin-bottom:6px;">2b. Generated signals</h2>
+    <p>
+      The extension computes buy/sell signals entirely locally using keyword matching on the fetched
+      articles. The computed signals (ticker, action, confidence score, supporting article list) are
+      stored locally in <code>chrome.storage.local</code> for display in the popup.
+    </p>
+    <ul>
+      <li><strong>Stored:</strong> Ticker symbol, BUY/SELL direction, confidence score, reason text, timestamps</li>
+      <li><strong>Transmitted:</strong> Never</li>
+    </ul>
+
+    <h2 style="font-size:15px; font-weight:600; margin-top:20px; margin-bottom:6px;">2c. Your feedback</h2>
+    <p>
+      When you rate a signal (thumbs up or down) and optionally type a note, that rating and note text
+      are stored locally in <code>chrome.storage.local</code> under the key <code>feedbackLog</code>.
+      This is the only user-generated content the extension stores.
+    </p>
+    <ul>
+      <li><strong>Stored:</strong> Rating (up/down), optional free-text note you typed, signal ID, ticker symbol, timestamp</li>
+      <li><strong>Transmitted:</strong> Never — your feedback text never leaves your device</li>
+      <li><strong>Accessible to:</strong> Only the extension itself, running in your browser</li>
+      <li><strong>How to delete:</strong> Removing the extension from Chrome permanently deletes all stored data</li>
+    </ul>
+
+    <h2>3. What we do NOT collect</h2>
+    <ul>
+      <li>No browsing history, URLs visited, or pages you have open (other than the Yahoo Finance page you are actively viewing)</li>
+      <li>No personal identifiers: name, email address, IP address, device ID, or user account information</li>
+      <li>No financial account information, portfolio holdings, or transaction data</li>
+      <li>No location data</li>
+      <li>No analytics, crash reports, or telemetry of any kind</li>
+      <li>No cookies or tracking pixels</li>
+    </ul>
+
+    <h2>4. Third-party services</h2>
+    <p>
+      The extension reads publicly available pages on <strong>finance.yahoo.com</strong> that you
+      navigate to yourself. It does not use any third-party analytics, advertising, or data-broker
+      services. It does not make requests to any server operated by the extension developer.
+    </p>
+    <p>
+      Your interaction with Yahoo Finance is governed by
+      <a href="https://legal.yahoo.com/us/en/yahoo/privacy/index.html" target="_blank" rel="noopener">
+        Yahoo's Privacy Policy
+      </a>.
+      FinanceSignal has no affiliation with Yahoo or Verizon Media.
+    </p>
+
+    <h2>5. Data security</h2>
+    <p>
+      All data is stored in Chrome's <code>chrome.storage.local</code> API, which is sandboxed to
+      the extension and inaccessible to websites or other extensions. No encryption beyond what Chrome
+      provides natively is applied, as no sensitive personal data is stored.
+    </p>
+
+    <h2>6. Children's privacy</h2>
+    <p>
+      FinanceSignal is intended for adults with an interest in financial markets. It does not
+      knowingly collect any data from users under the age of 13.
+    </p>
+
+    <h2>7. Changes to this policy</h2>
+    <p>
+      If the extension is updated in a way that changes what data is handled, this policy will be
+      updated and the "Last updated" date above will be revised. Continued use of the extension
+      after a policy update constitutes acceptance of the revised policy.
+    </p>
+
+    <h2>8. Financial disclaimer</h2>
+    <p>
+      FinanceSignal is a news analysis tool only. It does not provide licensed financial advice.
+      All signals are generated by keyword sentiment matching on news headlines and should not be
+      relied upon for investment decisions. Past signal accuracy is not indicative of future results.
+      Consult a qualified financial adviser before making any investment decisions.
+    </p>
+
+    <hr />
+
+    <div class="contact">
+      <strong>Questions about this policy?</strong><br />
+      If you have questions or requests regarding this privacy policy, please open an issue on the
+      extension's source repository or contact the developer directly through the Chrome Web Store
+      listing page.
+    </div>
+
+  </div>
+</body>
+</html>

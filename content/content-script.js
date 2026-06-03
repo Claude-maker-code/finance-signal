@@ -1,13 +1,21 @@
 // Injected on every Yahoo Finance page.
-// Extracts articles from the live DOM (DOMParser not needed — direct querySelectorAll).
-// Always merges structured-selector results with a full /news/ link harvest so
-// no article section is missed regardless of page layout.
+// Extracts articles from the live DOM (no DOMParser — direct querySelectorAll).
+//
+// Key design principles:
+//  • BOTH the structured-selector path and the /news/ link-harvest path always run.
+//  • Results are merged using a Map keyed by normalised headline — if the same
+//    article appears in both passes, their quoteTickers arrays are MERGED so
+//    that tickers found in either pass are preserved.
+//  • "quoteTickers" are Yahoo Finance's own /quote/TICKER/ links rendered next
+//    to each article. These are passed to the service worker so articles like
+//    "Alphabet's $80B stock sale" can produce a GOOGL signal even though the
+//    headline text doesn't contain "GOOGL".
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const RETRY_DELAY_MS = 1200;
-const MAX_RETRIES    = 6;    // up to ~7 seconds waiting for React to render
-const MIN_NEWS_LINKS = 5;    // consider page ready when this many /news/ links exist
+const RETRY_DELAY_MS     = 1200;
+const MAX_RETRIES        = 8;     // up to ~10 seconds waiting for React to render
+const MIN_READY_ARTICLES = 3;     // page is ready when this many articles WITH ticker tags exist
 
 // ─── Entry points ─────────────────────────────────────────────────────────────
 
@@ -17,13 +25,29 @@ function reportArticles() {
   chrome.runtime.sendMessage({ type: "ARTICLES_REPORT", articles }).catch(() => {});
 }
 
+/**
+ * Waits until React has rendered article cards WITH associated ticker tags,
+ * then reports. Falls back after MAX_RETRIES whether or not tickers are found.
+ */
 function waitForContentThenReport(retriesLeft) {
-  const count = document.querySelectorAll('a[href*="/news/"]').length;
-  if (count >= MIN_NEWS_LINKS || retriesLeft === 0) {
+  if (countArticlesWithTickers() >= MIN_READY_ARTICLES || retriesLeft === 0) {
     reportArticles();
   } else {
     setTimeout(() => waitForContentThenReport(retriesLeft - 1), RETRY_DELAY_MS);
   }
+}
+
+/**
+ * Counts how many /news/ anchors have a /quote/ link in a nearby container.
+ * Used as the readiness signal so we don't report before tickers have rendered.
+ */
+function countArticlesWithTickers() {
+  let count = 0;
+  for (const anchor of document.querySelectorAll('a[href*="/news/"]')) {
+    if (count >= MIN_READY_ARTICLES) break;
+    if (findContainerWithTickers(anchor)) count++;
+  }
+  return count;
 }
 
 if (document.readyState === "complete") {
@@ -42,23 +66,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // ─── Master extraction ────────────────────────────────────────────────────────
 
 /**
- * Runs BOTH the structured-selector path and the /news/-link-harvest path,
- * then merges results so articles from every section of the page are included.
+ * Runs both extraction paths and merges into a single deduplicated list.
+ * Uses a Map so that if the same article is found in both passes, the quoteTickers
+ * from both passes are UNIONED — this handles the common case where a structured
+ * selector captures the headline element but not the sibling ticker element.
  * @returns {Article[]}
  */
 function extractAllArticles() {
-  const articles = [];
-  const seenHeadlines = new Set();
+  // Map: normalised headline → article object (allows enrichment on duplicate)
+  const articleMap = new Map();
 
-  function addIfNew(article) {
+  function addOrEnrich(article) {
     const key = article.headline.toLowerCase().replace(/\s+/g, " ").trim();
-    if (key.length < 15 || seenHeadlines.has(key)) return;
-    seenHeadlines.add(key);
-    articles.push(article);
+    if (key.length < 15) return;
+
+    if (!articleMap.has(key)) {
+      articleMap.set(key, { ...article, quoteTickers: [...(article.quoteTickers || [])] });
+    } else {
+      // Same article seen again — enrich with any new tickers found in this pass
+      const existing = articleMap.get(key);
+      const merged   = [...new Set([...existing.quoteTickers, ...(article.quoteTickers || [])])];
+      articleMap.set(key, { ...existing, quoteTickers: merged });
+    }
   }
 
-  // ── Structured path ──────────────────────────────────────────────────────
-  // Good on topic/stream pages; may find sidebar articles on the homepage.
+  // ── Structured path (good on topic/stream pages; may miss tickers on homepage) ──
   const candidateSelectors = [
     'li[class*="stream-item"]',
     'div[data-test="story-item"]',
@@ -69,29 +101,26 @@ function extractAllArticles() {
     'ul[class*="stream"] > li',
     'article'
   ];
-
   for (const selector of candidateSelectors) {
     const elements = Array.from(document.querySelectorAll(selector));
     if (elements.length < 2) continue;
     const extracted = elements.map(extractFromElement).filter(Boolean);
     if (extracted.length >= 2) {
-      extracted.forEach(addIfNew);
-      break; // Only use first matching structured selector
+      extracted.forEach(addOrEnrich);
+      break;
     }
   }
 
-  // ── Link-harvest path ────────────────────────────────────────────────────
-  // Always runs — catches main article feed, related articles, sections missed
-  // by structural selectors, and the full homepage article list.
-  extractFromNewsLinks().forEach(addIfNew);
+  // ── Link-harvest path (always runs, covers all page layouts) ──────────────
+  extractFromNewsLinks().forEach(addOrEnrich);
 
-  return articles;
+  return [...articleMap.values()];
 }
 
 // ─── Structured element extraction ───────────────────────────────────────────
 
 /**
- * @param {Element} el - A container element (li, div, article)
+ * @param {Element} el
  * @returns {Article|null}
  */
 function extractFromElement(el) {
@@ -99,12 +128,10 @@ function extractFromElement(el) {
     "h3, h2, h1, [class*='headline'], [class*='title'], a[class*='title']"
   );
   const linkEl = el.querySelector("a[href]");
-
   if (!headlineEl && !linkEl) return null;
 
   const headline = (headlineEl || linkEl).textContent.trim();
-  if (!headline || headline.length < 10) return null;
-  if (isNavText(headline)) return null;
+  if (!headline || headline.length < 10 || isNavText(headline)) return null;
 
   const href      = linkEl ? linkEl.getAttribute("href") : "";
   const sourceUrl = normalizeUrl(href);
@@ -119,22 +146,26 @@ function extractFromElement(el) {
     ? (Date.parse(timeEl.getAttribute("datetime")) || extractNearbyTimestamp(el))
     : extractNearbyTimestamp(el);
 
+  // Walk UP from el to find the container that actually holds the ticker links —
+  // structured selectors often match a sub-element that does not contain siblings
+  const tickerContainer = findContainerWithTickers(el) || el;
+
   return {
     headline,
     summary,
     publishedAt,
     sourceUrl,
     source:       extractSourceName(el),
-    quoteTickers: extractQuoteTickers(el)   // Yahoo Finance's own ticker tags
+    quoteTickers: extractQuoteTickers(tickerContainer)
   };
 }
 
 // ─── Link-harvest extraction ──────────────────────────────────────────────────
 
 /**
- * Harvests all /news/ anchor tags from the entire page.
- * For each anchor it tries to extract a clean headline (avoiding source/time
- * metadata that may be bundled inside the same anchor element).
+ * Harvests every /news/ anchor tag from the full page DOM.
+ * For each anchor, walks up the DOM to find a container that includes the
+ * article's associated /quote/ ticker links.
  * @returns {Article[]}
  */
 function extractFromNewsLinks() {
@@ -142,17 +173,17 @@ function extractFromNewsLinks() {
 
   for (const anchor of document.querySelectorAll('a[href*="/news/"]')) {
     const headline = cleanAnchorHeadline(anchor);
-    if (!headline || headline.length < 15) continue;
-    if (isNavText(headline)) continue;
+    if (!headline || headline.length < 15 || isNavText(headline)) continue;
 
-    const container = findArticleContainer(anchor);
+    const container = findContainerWithTickers(anchor) || anchor.parentElement;
+
     articles.push({
       headline,
       summary:      "",
       publishedAt:  extractNearbyTimestamp(container || anchor),
       sourceUrl:    normalizeUrl(anchor.getAttribute("href") || ""),
       source:       extractNearbySource(anchor),
-      quoteTickers: extractQuoteTickers(container || anchor)
+      quoteTickers: extractQuoteTickers(container)
     });
   }
 
@@ -160,34 +191,20 @@ function extractFromNewsLinks() {
 }
 
 /**
- * Extracts a clean headline from an anchor element.
- * Yahoo Finance sometimes wraps an entire article card in one <a>, which means
- * textContent includes source names, timestamps, and badge labels.
- * Extraction priority:
- *   1. h3/h2/h1 child element
- *   2. aria-label attribute
- *   3. title attribute
- *   4. Full text with metadata prefixes stripped
- * @param {Element} anchor
- * @returns {string}
+ * Extracts a clean headline from an anchor, stripping metadata prefixes.
+ * Priority: h3/h2/h1 child → aria-label → title attr → stripped text content.
  */
 function cleanAnchorHeadline(anchor) {
-  // Priority 1: heading child
   const heading = anchor.querySelector("h3, h2, h1");
   if (heading) return heading.textContent.trim();
 
-  // Priority 2: aria-label
   const aria = anchor.getAttribute("aria-label");
   if (aria && aria.length > 15) return aria.trim();
 
-  // Priority 3: title attribute
   const title = anchor.getAttribute("title");
   if (title && title.length > 15) return title.trim();
 
-  // Priority 4: strip known metadata patterns from full text
-  // Pattern: "Category • time Real headline…"
-  //          "Breaking News • yesterday Real headline…"
-  //          "News • 2 days ago Real headline…"
+  // Strip "Category · time" prefixes like "Breaking News • yesterday "
   let text = anchor.textContent.trim();
   text = text.replace(
     /^[\w\s]+\s*[·•·]\s*(?:\d+\s*(?:s|m|h|d|min|hr|sec|minute|hour|day|week)s?\s*ago|yesterday|today|just now)\s*/i,
@@ -197,44 +214,48 @@ function cleanAnchorHeadline(anchor) {
   return text;
 }
 
-// ─── Ticker extraction from Yahoo Finance's own quote links ───────────────────
+// ─── Ticker container helpers ─────────────────────────────────────────────────
 
 /**
- * Yahoo Finance renders tickers as links to /quote/TICKER/ next to each article.
- * These are the ground-truth tickers associated with the story — more reliable
- * than text-matching for headlines that don't spell out ticker symbols.
- * @param {Element} container
+ * Walks UP the DOM from el to find the nearest ancestor that:
+ *   • contains at least one /quote/ link  AND
+ *   • contains no more than 3 /news/ links (avoids capturing an entire section)
+ *
+ * The "≤3 news links" guard prevents overshoot into a parent that spans multiple
+ * articles and would incorrectly assign ALL section tickers to one article.
+ *
+ * @param {Element} el
+ * @returns {Element|null}
+ */
+function findContainerWithTickers(el) {
+  let node = el.parentElement || el;
+  for (let depth = 0; depth < 7; depth++) {
+    if (!node) break;
+    const quoteCount = node.querySelectorAll('a[href*="/quote/"]').length;
+    const newsCount  = node.querySelectorAll('a[href*="/news/"]').length;
+    if (quoteCount > 0 && newsCount <= 3) return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Extracts all ticker symbols from /quote/TICKER/ links in the given container.
+ * Filters to simple stock tickers (1–5 uppercase letters) to exclude currency
+ * pairs (JPY=X), futures (CL=F), and other non-stock instruments.
+ * @param {Element|null} container
  * @returns {string[]}
  */
 function extractQuoteTickers(container) {
   if (!container) return [];
   const tickers = new Set();
   for (const link of container.querySelectorAll('a[href*="/quote/"]')) {
-    const m = (link.getAttribute("href") || "").match(/\/quote\/([A-Z0-9.^-]{1,10})\/?/i);
-    if (m) {
-      const ticker = m[1].toUpperCase();
-      // Skip currency pairs and indexes that aren't tradable stocks
-      if (!/^[A-Z]{1,5}$/.test(ticker)) continue;
-      tickers.add(ticker);
-    }
+    const m = (link.getAttribute("href") || "").match(/\/quote\/([A-Z0-9.^=-]{1,10})\/?/i);
+    if (!m) continue;
+    const ticker = m[1].toUpperCase();
+    if (/^[A-Z]{1,5}$/.test(ticker)) tickers.add(ticker); // stocks only, no special chars
   }
   return [...tickers];
-}
-
-/**
- * Finds the nearest ancestor element that contains /quote/ links.
- * Used to associate ticker tags with the right article in the fallback path.
- * @param {Element} anchor
- * @returns {Element|null}
- */
-function findArticleContainer(anchor) {
-  let el = anchor.parentElement;
-  for (let depth = 0; depth < 6; depth++) {
-    if (!el) break;
-    if (el.querySelectorAll('a[href*="/quote/"]').length > 0) return el;
-    el = el.parentElement;
-  }
-  return anchor.parentElement;
 }
 
 // ─── Timestamp helpers ────────────────────────────────────────────────────────
@@ -262,8 +283,7 @@ function parseRelativeTime(text) {
   if (!m) return null;
   const amount = parseInt(m[1], 10);
   const unit   = m[2][0].toLowerCase();
-  const msMap  = { s: 1000, m: 60000, h: 3600000, d: 86400000, w: 604800000 };
-  return Date.now() - amount * (msMap[unit] || 3600000);
+  return Date.now() - amount * ({ s: 1000, m: 60000, h: 3600000, d: 86400000, w: 604800000 }[unit] || 3600000);
 }
 
 // ─── Source helpers ───────────────────────────────────────────────────────────
@@ -307,5 +327,5 @@ function isNavText(text) {
  * @property {number}   publishedAt
  * @property {string}   sourceUrl
  * @property {string}   source
- * @property {string[]} quoteTickers - tickers extracted from Yahoo Finance's /quote/ links
+ * @property {string[]} quoteTickers
  */

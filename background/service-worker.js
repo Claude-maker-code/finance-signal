@@ -10,7 +10,8 @@ import { generateSignals }         from "../analysis/signal-engine.js";
 import {
   STORAGE_KEYS,
   REFRESH_ALARM_NAME,
-  REFRESH_INTERVAL_MINUTES
+  REFRESH_INTERVAL_MINUTES,
+  TICKER_TO_COMPANY
 } from "../shared/constants.js";
 
 const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
@@ -78,11 +79,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
  * @returns {Promise<void>}
  */
 async function analyzeAndStore(rawArticles) {
-  // Add ticker annotations — extractTickersFromText is pure JS, no DOM needed
-  const articles = rawArticles.map(article => ({
-    ...article,
-    tickers: extractTickersFromText(article.headline + " " + article.summary)
-  }));
+  // Build final ticker list for each article by merging two sources:
+  //   1. quoteTickers — tickers Yahoo Finance explicitly tagged on the article (most reliable)
+  //   2. extractTickersFromText — tickers found by scanning the headline/summary text
+  // Both are filtered to only known tickers so unknown symbols don't create noise.
+  const articles = rawArticles.map(article => {
+    const fromYahoo = (article.quoteTickers || []).filter(t => TICKER_TO_COMPANY[t]);
+    const fromText  = extractTickersFromText(article.headline + " " + (article.summary || ""));
+    const merged    = [...new Set([...fromYahoo, ...fromText])];
+    return { ...article, tickers: merged };
+  });
 
   const recentArticles = filterToRecentArticles(articles);
   const signals        = generateSignals(recentArticles);
